@@ -24,7 +24,7 @@ class VirusTotalValves(BaseModel):
         default="", description="API Key for Virus Total"
     )
 
-class VirusTotalTools:
+class Pipeline:
     """
     Retrieves and displays VirusTotal reports for a given file hash.
     """
