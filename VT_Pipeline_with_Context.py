@@ -1,6 +1,6 @@
 """
 title: VirusTotal Hash Analysis Pipeline
-author: open-webui
+author: Bob Blackmore
 date: 2024-12-20
 version: 1.0
 license: MIT
