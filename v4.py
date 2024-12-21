@@ -22,7 +22,7 @@ class VirusTotalValves(BaseModel):
     )
 
 # No need to inherit from Pipeline for standalone functionality
-class VirusTotalPipeline:
+class Pipeline:
     """
     Retrieves and displays VirusTotal reports for a given file hash.
     """
@@ -263,7 +263,7 @@ if __name__ == "__main__":
     # os.environ["VIRUSTOTAL_API_KEY"] = "YOUR_API_KEY"
 
     file_hash = input("Enter the file hash: ")
-    pipeline_instance = VirusTotalPipeline()
+    pipeline_instance = Pipeline()
 
     async def test_pipeline(file_hash):
         result = await pipeline_instance.run(file_hash)
