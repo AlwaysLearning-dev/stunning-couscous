@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class VirusTotalValves(BaseModel):
+class Valves(BaseModel):
     """
     Valve for API key used to connect to Virus Total.
     """
@@ -21,13 +21,13 @@ class VirusTotalValves(BaseModel):
         default="", description="API Key for Virus Total"
     )
 
-class Pipeline:  # Define the Pipeline class
+class Pipeline:
     """
     Retrieves and displays VirusTotal reports for a given file hash.
     """
     def __init__(self):
         # Initialize valves using environment variables or defaults
-        self.valves = VirusTotalValves(
+        self.valves = Valves(
             **{
                 "virustotal_api_key": os.getenv("VIRUSTOTAL_API_KEY", ""),
             }
