@@ -2,11 +2,11 @@ import requests
 import json
 import re
 from pydantic import BaseModel, Field
-from typing import Optional, List, Callable, Awaitable
+from typing import Optional, List, Callable, Awaitable, Dict, Any, Generator
 import time
 import aiohttp
 import logging
-from openwebui.pipeline.base import Pipeline
+import os  # Import the 'os' module
 
 # --- Configure Logging ---
 logging.basicConfig(level=logging.DEBUG,
@@ -21,13 +21,18 @@ class VirusTotalValves(BaseModel):
         default="", description="API Key for Virus Total"
     )
 
-class VirusTotalPipeline(Pipeline):
+# No need to inherit from Pipeline for standalone functionality
+class VirusTotalPipeline:
     """
     Retrieves and displays VirusTotal reports for a given file hash.
     """
     def __init__(self):
-        super().__init__()
-        self.valves = VirusTotalValves()  # Initialize the valves
+        # Initialize valves using environment variables or defaults
+        self.valves = VirusTotalValves(
+            **{
+                "virustotal_api_key": os.getenv("VIRUSTOTAL_API_KEY", ""),
+            }
+        )
         self.last_emit_time = 0
         self.emit_interval = 1.0
         self.enable_status_indicator = True
@@ -55,19 +60,21 @@ class VirusTotalPipeline(Pipeline):
             return False
         return True
 
-    async def get_virustotal_report(self, file_hash, __event_emitter__: Callable[[dict], Awaitable[None]] = None,):
+    async def get_virustotal_report(self, file_hash, __event_emitter__: Optional[Callable[[dict], Awaitable[None]]] = None):
         """
         Retrieves a VirusTotal report for a given file hash.
         """
-        api_key = self.valves.virustotal_api_key  # Get API key from valves
+        api_key = self.valves.virustotal_api_key
         logger.info(f"Using API key from valves: {api_key}")
 
         if not self.validate_api_key(api_key):
-            await self.emit_status(__event_emitter__, "error", "Invalid API key format.", True)
+            if __event_emitter__:
+                await self.emit_status(__event_emitter__, "error", "Invalid API key format.", True)
             return None
 
         if not self.validate_file_hash(file_hash):
-            await self.emit_status(__event_emitter__, "error", "Invalid file hash format", True)
+            if __event_emitter__:
+                await self.emit_status(__event_emitter__, "error", "Invalid file hash format", True)
             return None
 
         url = f"{self.VIRUSTOTAL_API_URL}{file_hash}"
@@ -88,17 +95,20 @@ class VirusTotalPipeline(Pipeline):
 
         except aiohttp.ClientResponseError as e:
             error_message = f"HTTP error fetching VirusTotal report: {e.status}, {e.message}"
-            await self.emit_status(__event_emitter__, "error", error_message, True)
+            if __event_emitter__:
+                await self.emit_status(__event_emitter__, "error", error_message, True)
             logger.error(error_message)
             return None
         except aiohttp.ClientError as e:
             error_message = f"Network error fetching VirusTotal report: {str(e)}"
-            await self.emit_status(__event_emitter__, "error", error_message, True)
+            if __event_emitter__:
+                await self.emit_status(__event_emitter__, "error", error_message, True)
             logger.error(error_message)
             return None
         except Exception as e:
             error_message = f"Unexpected error fetching VirusTotal report: {str(e)}"
-            await self.emit_status(__event_emitter__, "error", error_message, True)
+            if __event_emitter__:
+                await self.emit_status(__event_emitter__, "error", error_message, True)
             logger.error(error_message)
             return None
 
@@ -208,49 +218,56 @@ class VirusTotalPipeline(Pipeline):
             )
             self.last_emit_time = current_time
 
+    def pipe(self, prompt: str = None, **kwargs) -> Generator[str, None, None]:
+        """
+        Not used in this pipeline.
+        """
+        file_hash = prompt or kwargs.get('file_hash', '')
+
+        if not file_hash:
+            yield "Error: File hash is required."
+            return
+
+        report = self.get_virustotal_report(file_hash)
+
+        if report:
+            formatted_report = self.format_report_for_display(report)
+            yield formatted_report
+        else:
+            yield "Error: Failed to retrieve Virus Total report."
+
     async def run(
         self,
         file_hash: str,
         **kwargs
-    ) -> str:
+    ) -> List[Dict[str, Any]]:
         """
         Retrieves a formatted VirusTotal report for a given file hash.
         This is the main entry point for the pipeline.
         """
         logger.info(f"Getting VirusTotal report for file hash: {file_hash}")
-        await self.emit_status(
-            None, "info", "Starting Virus Total file report", False
-        )
 
         report = await self.get_virustotal_report(file_hash, None)
 
         if report:
-            formatted_report = self.format_report_for_display(report)
-            await self.emit_status(
-                None, "info", "Virus Total report complete", True
-            )
+            formatted_report = self.format_report_for_openwebui(report)
             logger.info("VirusTotal report retrieval complete.")
-            return formatted_report
+            return [formatted_report]
         else:
-            await self.emit_status(
-                None, "error", "Failed to retrieve Virus Total report", True
-            )
             logger.error("Failed to retrieve VirusTotal report.")
-            return "Error: Failed to retrieve Virus Total report"
+            return [{"error": "Failed to retrieve Virus Total report."}]
 
-    async def on_start(self, __event_emitter__: Callable[[dict], Awaitable[None]] = None):
-        logger.info("Virus Total Pipeline started")
-
-    async def on_stop(self, __event_emitter__: Callable[[dict], Awaitable[None]] = None):
-        logger.info("Virus Total Pipeline stopped")
-
-# --- Example Usage (Not directly executable in OpenWebUI) ---
+# Example usage (for testing outside of OpenWebUI):
 if __name__ == "__main__":
+    # You can optionally set the API key as an environment variable for testing
+    # os.environ["VIRUSTOTAL_API_KEY"] = "YOUR_API_KEY"
+
     file_hash = input("Enter the file hash: ")
     pipeline_instance = VirusTotalPipeline()
 
     async def test_pipeline(file_hash):
         result = await pipeline_instance.run(file_hash)
-        print(result)
+        print(json.dumps(result, indent=2))
 
+    import asyncio
     asyncio.run(test_pipeline(file_hash))
