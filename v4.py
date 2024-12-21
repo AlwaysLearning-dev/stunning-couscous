@@ -223,6 +223,7 @@ class Pipeline:
         self,
         file_hash: str,
         __event_emitter__: Callable[[dict], Awaitable[None]] = None,
+        **kwargs  # Accept and ignore extra keyword arguments
     ) -> str:
         """
         Retrieves a formatted VirusTotal report for a given file hash.
@@ -230,7 +231,7 @@ class Pipeline:
         :param file_hash: The SHA-256 hash of the file to check.
         :return: A formatted string containing the VirusTotal report, or an error message.
         """
-        logger.info(f"Getting VirusTotal report for file hash: {file_hash}")  # Info log
+        logger.info(f"Getting VirusTotal report for file hash: {file_hash}")
         if __event_emitter__:
             await self.emit_status(
                 __event_emitter__, "info", "Starting Virus Total file report", False
@@ -244,14 +245,14 @@ class Pipeline:
                 await self.emit_status(
                     __event_emitter__, "info", "Virus Total report complete", True
                 )
-            logger.info("VirusTotal report retrieval complete.")  # Info log
+            logger.info("VirusTotal report retrieval complete.")
             return formatted_report
         else:
             if __event_emitter__:
                 await self.emit_status(
                     __event_emitter__, "error", "Failed to retrieve Virus Total report", True
                 )
-            logger.error("Failed to retrieve VirusTotal report.")  # Error log
+            logger.error("Failed to retrieve VirusTotal report.")
             return "Error: Failed to retrieve Virus Total report"
 
     async def run(
@@ -281,7 +282,7 @@ if __name__ == "__main__":
     # os.environ["VIRUSTOTAL_API_KEY"] = "YOUR_API_KEY"
 
     file_hash = input("Enter the file hash: ")
-    pipeline_instance = Pipeline()  # Use the Pipeline class
+    pipeline_instance = Pipeline()
 
     async def test_pipeline(file_hash):
         result = await pipeline_instance.run(file_hash)
