@@ -6,7 +6,7 @@ from typing import Optional, List, Callable, Awaitable, Dict, Any, Generator
 import time
 import aiohttp
 import logging
-import os  # Import the 'os' module
+import os
 
 # --- Configure Logging ---
 logging.basicConfig(level=logging.DEBUG,
@@ -21,8 +21,7 @@ class VirusTotalValves(BaseModel):
         default="", description="API Key for Virus Total"
     )
 
-# No need to inherit from Pipeline for standalone functionality
-class Pipeline:
+class Pipeline:  # Define the Pipeline class
     """
     Retrieves and displays VirusTotal reports for a given file hash.
     """
@@ -37,6 +36,8 @@ class Pipeline:
         self.emit_interval = 1.0
         self.enable_status_indicator = True
         self.citation = True
+
+        self.pipe = self.get_virus_total_report_tool
 
     VIRUSTOTAL_API_URL = "https://www.virustotal.com/api/v3/files/"
 
@@ -217,24 +218,41 @@ class Pipeline:
                 }
             )
             self.last_emit_time = current_time
-
-    def pipe(self, prompt: str = None, **kwargs) -> Generator[str, None, None]:
+            
+    async def get_virus_total_report_tool(
+        self,
+        file_hash: str,
+        __event_emitter__: Callable[[dict], Awaitable[None]] = None,
+    ) -> str:
         """
-        Not used in this pipeline.
+        Retrieves a formatted VirusTotal report for a given file hash.
+
+        :param file_hash: The SHA-256 hash of the file to check.
+        :return: A formatted string containing the VirusTotal report, or an error message.
         """
-        file_hash = prompt or kwargs.get('file_hash', '')
+        logger.info(f"Getting VirusTotal report for file hash: {file_hash}")  # Info log
+        if __event_emitter__:
+            await self.emit_status(
+                __event_emitter__, "info", "Starting Virus Total file report", False
+            )
 
-        if not file_hash:
-            yield "Error: File hash is required."
-            return
-
-        report = self.get_virustotal_report(file_hash)
+        report = await self.get_virustotal_report(file_hash, __event_emitter__)
 
         if report:
             formatted_report = self.format_report_for_display(report)
-            yield formatted_report
+            if __event_emitter__:
+                await self.emit_status(
+                    __event_emitter__, "info", "Virus Total report complete", True
+                )
+            logger.info("VirusTotal report retrieval complete.")  # Info log
+            return formatted_report
         else:
-            yield "Error: Failed to retrieve Virus Total report."
+            if __event_emitter__:
+                await self.emit_status(
+                    __event_emitter__, "error", "Failed to retrieve Virus Total report", True
+                )
+            logger.error("Failed to retrieve VirusTotal report.")  # Error log
+            return "Error: Failed to retrieve Virus Total report"
 
     async def run(
         self,
@@ -263,7 +281,7 @@ if __name__ == "__main__":
     # os.environ["VIRUSTOTAL_API_KEY"] = "YOUR_API_KEY"
 
     file_hash = input("Enter the file hash: ")
-    pipeline_instance = Pipeline()
+    pipeline_instance = Pipeline()  # Use the Pipeline class
 
     async def test_pipeline(file_hash):
         result = await pipeline_instance.run(file_hash)
